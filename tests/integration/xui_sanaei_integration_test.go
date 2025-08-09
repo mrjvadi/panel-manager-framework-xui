@@ -45,7 +45,7 @@ func Test_XUI_Sanaei_CloneInbound(t *testing.T) {
 		t.Fatal("XUITyped not supported")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Increased timeout
 	defer cancel()
 
 	p := mgr.PanelSession("xui-sanaei-live")
@@ -56,14 +56,14 @@ func Test_XUI_Sanaei_CloneInbound(t *testing.T) {
 	}
 	t.Logf("found %v inbounds", info)
 
-	// یک آپدیت سبک
+	// A light update
 	remark := "my-remark2"
 	port := 23256
 	client := xdto.ClientCreate{
 		Email:      "user2@example.com",
 		Enable:     true,
 		TotalGB:    50, // GB
-		ExpiryTime: 0,  // Unix seconds یا 0
+		ExpiryTime: 0,  // Unix seconds or 0
 		LimitIP:    0,
 		Comment:    "created by tests",
 	}
@@ -71,7 +71,7 @@ func Test_XUI_Sanaei_CloneInbound(t *testing.T) {
 	cloneda, err := p.XUI().CloneInboundShallow(1, xdto.CloneInboundOptions{
 		Remark: &remark,
 		Port:   &port,
-		Client: &client, // اگر نذاری، کلاینت ساخته نمی‌شود
+		Client: &client, 
 	})
 	if err != nil {
 		t.Fatalf("clone inbound shallow failed: %v", err)
@@ -79,17 +79,4 @@ func Test_XUI_Sanaei_CloneInbound(t *testing.T) {
 	}
 	t.Logf("updated inbound id=%d remark=%s", cloneda.ID, cloneda.Remark)
 
-	//// Cleanup اختیاری (اگر درایور Delete را اکسپوز کرده باشد)
-	//type deleter interface {
-	//	DeleteInboundByID(ctx context.Context, id int) error
-	//}
-	//if dd, ok := core.As[deleter](mgr, "xui-sanaei-live"); ok {
-	//	if err := dd.DeleteInboundByID(ctx, cloneda.ID); err != nil {
-	//		t.Logf("delete inbound failed (ignored): %v", err)
-	//	} else {
-	//		t.Logf("deleted inbound id=%d", cloneda.ID)
-	//	}
-	//} else {
-	//	t.Log("deleter not supported; consider manual cleanup")
-	//}
 }

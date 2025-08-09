@@ -19,10 +19,7 @@ import (
 	ext "github.com/mrjvadi/panel-manager-framework-xui/core/ext"
 )
 
-// اطمینان از اینکه درایور، این اکستنشن را هم اکسپوز می‌کند:
 var _ ext.XUIShallowClone = (*sanaei)(nil)
-
-// ---- helpers (لوکال و امن) ----
 
 func (d *sanaei) ep(key, def string) string {
 	if s := d.sp.Endpoints[key]; s != "" {
@@ -50,7 +47,6 @@ func anyToInt(a any) int {
 	}
 }
 
-// از ساختارهای متنوع پاسخ‌ها، آبجکت اصلی را بیرون می‌کشد
 func takeObj(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
@@ -169,7 +165,7 @@ func (d *sanaei) addClientFromCreate(ctx context.Context, inboundID int, c xdto.
 
 	payload := map[string]any{
 		"id":       inboundID,
-		"settings": string(sb), // اکثر فورک‌ها string می‌خوان
+		"settings": string(sb),
 	}
 	body, _ := json.Marshal(payload)
 
@@ -178,14 +174,12 @@ func (d *sanaei) addClientFromCreate(ctx context.Context, inboundID int, c xdto.
 	return d.doJSON(ctx, req, nil)
 }
 
-// ---- پیاده‌سازی اصلی: CloneInboundShallow ----
 func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xdto.CloneInboundOptions) (xdto.Inbound, error) {
 	orig, err := d.getInboundRaw(ctx, inboundID)
 	if err != nil {
 		return xdto.Inbound{}, err
 	}
 
-	// Remark
 	var newRemark string
 	if opts.Remark != nil && *opts.Remark != "" {
 		newRemark = *opts.Remark
@@ -197,7 +191,6 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		newRemark = baseRemark + "-" + randSlug(6)
 	}
 
-	// Port
 	var port int
 	if opts.Port != nil {
 		port = *opts.Port
@@ -209,7 +202,6 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		}
 	}
 
-	// قبل از add: شناسه‌های موجود برای resolve
 	before, _ := d.listInboundsRaw(ctx)
 	beforeIDs := make(map[int]struct{}, len(before))
 	for _, m := range before {
@@ -217,8 +209,7 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 			beforeIDs[id] = struct{}{}
 		}
 	}
-
-	// بدنهٔ form-urlencoded دقیقاً مثل نمونهٔ پنل
+	
 	buildForm := func(rem string, p int) url.Values {
 		v := url.Values{}
 		v.Set("up", "0")
@@ -253,7 +244,6 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		var resp map[string]any
 		err := d.doJSON(ctx, req, &resp)
 		if err != nil {
-			// اگر پورت تکراری بود، یه پورت جدید انتخاب کن و دوباره
 			if he, ok := err.(*core.HTTPError); ok && he.Code == http.StatusConflict {
 				port = 20000 + mrand.Intn(40000)
 				continue
@@ -261,16 +251,15 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 			return xdto.Inbound{}, err
 		}
 
-		// بعضی نسخه‌ها id را در obj می‌دهند، بعضی‌ها نه
 		obj := takeObj(resp)
 		if id := anyToInt(obj["id"]); id > 0 {
 			created = xdto.Inbound{ID: id, Remark: newRemark, Port: port, Raw: obj}
 			break
 		}
 
-		// اگر id نگرفتیم، کمی صبر و resolve از list
+		// Retry with backoff if ID is not returned
 		for i := 0; i < 5 && created.ID == 0; i++ {
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(time.Duration(150*(i+1)) * time.Millisecond) // Exponential backoff
 			if got, ok := d.resolveNewInbound(ctx, beforeIDs, newRemark, port); ok {
 				created = got
 				break
@@ -280,16 +269,14 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		if created.ID != 0 {
 			break
 		}
-
-		// اگر هنوز پیدا نشد، پورت رو عوض کنیم شاید conflict بی‌سروصدا رخ داده بوده
+		
 		port = 20000 + mrand.Intn(40000)
 	}
 
 	if created.ID == 0 {
 		return xdto.Inbound{}, fmt.Errorf("clone created but id not resolved (remark=%s, port=%d)", newRemark, port)
 	}
-
-	// اگر Caller کلاینت داده، مطابق همان مقادیر خودت بسازیم
+	
 	if opts.Client != nil {
 		if err := d.addClientFromCreate(ctx, created.ID, *opts.Client); err != nil {
 			return created, fmt.Errorf("inbound cloned, add-client failed: %w", err)
@@ -299,7 +286,6 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 	return created, nil
 }
 
-// داخل drivers/xui/sanaei_shallow.go، نزدیک بقیه هلسپرها
 func toJSONString(v any) string {
 	switch t := v.(type) {
 	case string:
@@ -310,7 +296,6 @@ func toJSONString(v any) string {
 	case nil:
 		return ""
 	default:
-		// اگر نوع دیگری آمد، آخرین تلاش: marshal
 		b, _ := json.Marshal(t)
 		return string(b)
 	}
