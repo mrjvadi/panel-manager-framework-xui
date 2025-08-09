@@ -1,74 +1,34 @@
 package core
 
-import (
-    "sync"
-    "time"
-)
+import "time"
+import "sync"
 
-// Breaker: مدارشکن سبک
 type Breaker struct {
-    mu        sync.Mutex
-    state     int // 0 closed, 1 open, 2 half-open
-    fails     int
-    success   int
+    mu sync.Mutex
+    state int
+    fails int
+    success int
     threshold int
-    cooldown  time.Duration
-    openedAt  time.Time
+    cooldown time.Duration
+    openedAt time.Time
 }
 
-func NewBreaker(threshold int, cooldown time.Duration) *Breaker {
-    if threshold <= 0 { threshold = 5 }
-    if cooldown <= 0 { cooldown = 5 * time.Second }
-    return &Breaker{ threshold: threshold, cooldown: cooldown }
+func NewBreaker(th int, cd time.Duration) *Breaker {
+    if th <= 0 { th = 5 }
+    if cd <= 0 { cd = 5 * time.Second }
+    return &Breaker{ threshold: th, cooldown: cd }
 }
 
 func (b *Breaker) Allow() bool {
     b.mu.Lock(); defer b.mu.Unlock()
     switch b.state {
-    case 0: // closed
-        return True
-    case 1: // open
-        if time.Since(b.openedAt) >= b.cooldown {
-            b.state = 2 // half-open
-            b.success = 0; b.fails = 0
-            return True
-        }
-        return False
-    case 2: // half-open
-        return True
-    default:
-        return True
+    case 0: return true
+    case 1:
+        if time.Since(b.openedAt) >= b.cooldown { b.state = 2; b.fails=0; b.success=0; return true }
+        return false
+    case 2: return true
+    default: return true
     }
 }
-
-func (b *Breaker) OnSuccess() {
-    b.mu.Lock(); defer b.mu.Unlock()
-    switch b.state {
-    case 0:
-        b.success++
-    case 2: // half-open
-        b.success++
-        if b.success >= 2 { // چند موفقیت متوالی برای بستن کامل
-            b.state = 0
-            b.success = 0; b.fails = 0
-        }
-    }
-}
-
-func (b *Breaker) OnFailure() {
-    b.mu.Lock(); defer b.mu.Unlock()
-    b.fails++
-    switch b.state {
-    case 0:
-        if b.fails >= b.threshold {
-            b.state = 1
-            b.openedAt = time.Now()
-        }
-    case 2:
-        // در حالت half-open با یک شکست باز می‌ماند
-        b.state = 1
-        b.openedAt = time.Now()
-    }
-}
-
-const True = true
+func (b *Breaker) OnSuccess() { b.mu.Lock(); if b.state==2 { b.success++; if b.success>=2 { b.state=0; b.success=0; b.fails=0 } }; b.mu.Unlock() }
+func (b *Breaker) OnFailure() { b.mu.Lock(); if b.state==0 { b.fails++; if b.fails>=b.threshold { b.state=1; b.openedAt=time.Now() } } else if b.state==2 { b.state=1; b.openedAt=time.Now() }; b.mu.Unlock() }

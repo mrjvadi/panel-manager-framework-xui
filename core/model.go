@@ -1,43 +1,29 @@
 package core
 
-// مدل‌های متحد
-
 type User struct {
-    ID          string `json:"id"`
-    Username    string `json:"username"`
-    ExpireAt    *int64 `json:"expireAt,omitempty"`
-    TrafficUsed *int64 `json:"trafficUsed,omitempty"`
-    Raw         any    `json:"raw,omitempty"`
+    ID       string `json:"id,omitempty"`
+    Username string `json:"username,omitempty"`
+    Up       int64  `json:"up,omitempty"`
+    Down     int64  `json:"down,omitempty"`
 }
 
 type Inbound struct {
-    ID     string `json:"id"`
-    Type   string `json:"type"`
-    Remark string `json:"remark,omitempty"`
-    Port   *int   `json:"port,omitempty"`
-    Raw    any    `json:"raw,omitempty"`
+    ID       string `json:"id,omitempty"`
+    Protocol string `json:"protocol,omitempty"`
+    Port     int    `json:"port,omitempty"`
 }
 
-// قابلیت‌ها و Featureها
+type TLS struct { Insecure bool }
+type BasicAuth struct { Username, Password string }
 
-type Feature string
-
-const (
-    // Marzban
-    FeatureSubscriptions Feature = "subscriptions"
-    FeatureUsersUsage    Feature = "users_usage"
-    FeatureSystemInfo    Feature = "system_info"
-    // X-UI
-    FeatureXUIClients    Feature = "xui_clients"
-)
-
-type Capabilities struct {
-    UsersCRUD     bool
-    InboundsCRUD  bool
-    TrafficStats  bool
-    UserSuspend   bool
-    UserReset     bool
-    Extra         map[Feature]bool
+type PanelSpec struct {
+    ID        string
+    BaseURL   string
+    Auth      BasicAuth
+    TLS       TLS
+    Version   string
+    Endpoints map[string]string
 }
 
-func (c Capabilities) Has(f Feature) bool { return c.Extra != nil && c.Extra[f] }
+type Capabilities struct{ bits uint64 }
+func (c Capabilities) Has(x Capabilities) bool { return (c.bits & x.bits) != 0 }

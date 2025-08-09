@@ -11,6 +11,7 @@ type DriverConfig struct {
     BreakerThresh   int
     BreakerCooldown time.Duration
     HTTPClient      *http.Client
+    Logger          Logger
 }
 
 func collectDriverConfig(opts ...Option) DriverConfig {
@@ -22,5 +23,6 @@ func collectDriverConfig(opts ...Option) DriverConfig {
         BreakerThresh: o.BreakerThresh,
         BreakerCooldown: o.BreakerCooldown,
         HTTPClient: o.HTTPClient,
+        Logger: o.Logger,
     }
 }

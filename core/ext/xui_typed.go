@@ -5,7 +5,6 @@ import (
     xdto "github.com/mrjvadi/panel-manager-framework-xui/core/dto/xui"
 )
 
-// XUITyped: نسخه‌ی type-safe برای خانواده‌ی X-UI
 type XUITyped interface {
     GetInboundTyped(ctx context.Context, inboundID int) (xdto.Inbound, error)
     AddInboundTyped(ctx context.Context, in xdto.InboundCreate) (xdto.Inbound, error)

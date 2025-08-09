@@ -1,39 +1,33 @@
 package core
 
-import "strings"
+import (
+    "regexp"
+    "strconv"
+    "strings"
+)
 
-// compareVersionStr: مقایسه‌ی a و b (رشته‌ای). خروجی: -1 اگر a<b، 0 اگر برابر، 1 اگر a>b
-func compareVersionStr(a, b string) int { return compareVersionParts(splitVer(a), splitVer(b)) }
+var nonNum = regexp.MustCompile(`[^0-9]+`)
 
-func splitVer(s string) []int {
-    s = strings.TrimSpace(s)
-    s = strings.TrimPrefix(s, "v")
-    s = strings.TrimPrefix(s, "V")
-    parts := strings.Split(s, ".")
+func norm(v string) []int {
+    v = strings.TrimPrefix(v, "v")
+    v = strings.SplitN(v, "-", 2)[0]
+    parts := strings.Split(v, ".")
     out := make([]int, 0, len(parts))
     for _, p := range parts {
-        p = strings.TrimSpace(p)
+        p = nonNum.ReplaceAllString(p, "")
         if p == "" { out = append(out, 0); continue }
-        n := 0
-        for i := 0; i < len(p); i++ {
-            if p[i] < '0' || p[i] > '9' { // توقف در اولین غیررقم، مثل "1-rc1"
-                break
-            }
-            n = n*10 + int(p[i]-'0')
-        }
+        n, _ := strconv.Atoi(p)
         out = append(out, n)
     }
+    for len(out) < 3 { out = append(out, 0) }
     return out
 }
 
-func compareVersionParts(a, b []int) int {
-    n := len(a); if len(b) > n { n = len(b) }
-    for i := 0; i < n; i++ {
-        ai, bi := 0, 0
-        if i < len(a) { ai = a[i] }
-        if i < len(b) { bi = b[i] }
-        if ai < bi { return -1 }
-        if ai > bi { return 1 }
+func compareVersionStr(a, b string) int {
+    aa := norm(a); bb := norm(b)
+    for i := 0; i < len(aa) && i < len(bb); i++ {
+        if aa[i] < bb[i] { return -1 }
+        if aa[i] > bb[i] { return 1 }
     }
     return 0
 }

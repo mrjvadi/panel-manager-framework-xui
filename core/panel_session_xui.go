@@ -1,11 +1,14 @@
 package core
 
 import (
-    xdto "github.com/mrjvadi/panel-manager-framework-xui/core/dto/xui"
     ext "github.com/mrjvadi/panel-manager-framework-xui/core/ext"
+    xdto "github.com/mrjvadi/panel-manager-framework-xui/core/dto/xui"
 )
 
-// CloneInbound: شورتکات بدون نیاز به ctx بیرونی
+type PanelXUI struct{ p *Panel }
+
+func (p *Panel) XUI() PanelXUI { return PanelXUI{ p: p } }
+
 func (x PanelXUI) CloneInbound(inboundID int, opts xdto.CloneInboundOptions) (xdto.Inbound, error) {
     if xt, ok := x.p.m.As[ext.XUITyped](x.p.id); ok {
         ctx, cancel := x.p.req.derive(); defer cancel()
@@ -13,9 +16,7 @@ func (x PanelXUI) CloneInbound(inboundID int, opts xdto.CloneInboundOptions) (xd
     }
     return xdto.Inbound{}, ErrExtNotSupported
 }
-
-// کمکی‌ها
-func (x PanelXUI) CloneInboundWithPort(inboundID int, port int) (xdto.Inbound, error) {
+func (x PanelXUI) CloneInboundWithPort(inboundID, port int) (xdto.Inbound, error) {
     return x.CloneInbound(inboundID, xdto.CloneInboundOptions{ Port: &port })
 }
 func (x PanelXUI) CloneInboundWithRemark(inboundID int, remark string) (xdto.Inbound, error) {

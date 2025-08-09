@@ -1,6 +1,13 @@
 package core
 
-var registry = map[string]DriverFactory{}
+import "sync"
 
-func Register(name string, f DriverFactory) { registry[name] = f }
-func Factory(name string) (DriverFactory, bool) { f, ok := registry[name]; return f, ok }
+type FactoryFn func(PanelSpec, ...Option) (Driver, error)
+
+var (
+    regMu sync.RWMutex
+    reg = map[string]FactoryFn{}
+)
+
+func Register(name string, fn FactoryFn) { regMu.Lock(); defer regMu.Unlock(); reg[name] = fn }
+func Factory(name string) (FactoryFn, bool) { regMu.RLock(); defer regMu.RUnlock(); fn, ok := reg[name]; return fn, ok }
