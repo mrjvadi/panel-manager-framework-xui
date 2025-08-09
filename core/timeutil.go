@@ -2,4 +2,10 @@ package core
 
 import "time"
 
-func chooseTimeout(x, def time.Duration) time.Duration { if x>0 { return x }; return def }
+// Exported (قبلاً chooseTimeout بود)
+func ChooseTimeout(x, def time.Duration) time.Duration {
+	if x > 0 {
+		return x
+	}
+	return def
+}
