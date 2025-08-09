@@ -15,9 +15,7 @@ func init() { core.Register(AlirezaName, NewAlireza) }
 type alireza struct{ *generic }
 
 func NewAlireza(sp core.PanelSpec, opts ...core.Option) (core.Driver, error) {
-    if sp.Endpoints == nil { sp.Endpoints = map[string]string{} }
-    if sp.Endpoints["login"] == "" { sp.Endpoints["login"] = "/api/auth/login" }
-    if sp.Version == "" { sp.Version = "v2.2.0" }
+    // some forks use different login path; override via spec.Endpoints if needed
     g := newGeneric(sp, opts...)
     return &alireza{ g }, nil
 }

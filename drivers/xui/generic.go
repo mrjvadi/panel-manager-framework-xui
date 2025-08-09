@@ -20,7 +20,16 @@ type generic struct {
     stat struct{ token string }
 }
 
+func ensureEndpoints(m map[string]string) map[string]string {
+    if m == nil { m = map[string]string{} }
+    for k, v := range defaultEndpoints {
+        if _, ok := m[k]; !ok { m[k] = v }
+    }
+    return m
+}
+
 func newGeneric(sp core.PanelSpec, opts ...core.Option) *generic {
+    sp.Endpoints = ensureEndpoints(sp.Endpoints)
     cfg := collectDriverConfig(opts...)
     cli := core.NewHTTP(sp.BaseURL, sp.TLS.Insecure, chooseTimeout(cfg.Timeout, 30*time.Second), cfg.HTTPClient)
     if cfg.BreakerThresh > 0 { cli.Br = core.NewBreaker(cfg.BreakerThresh, cfg.BreakerCooldown) }

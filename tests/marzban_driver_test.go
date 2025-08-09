@@ -40,7 +40,7 @@ func TestMarzban_ListUsers_And_SystemVersion(t *testing.T) {
     if err != nil { t.Fatal(err) }
     if len(arr) != 1 || arr[0].Username != "ali" { t.Fatalf("bad users: %#v", arr) }
 
-    m := d.(*driver.driver) // access test-only type
+    m := d.(*driver.driver)
     if _, err := m.SystemInfo(context.Background()); err != nil { t.Fatal(err) }
     if m.Version() != "v0.9.0" { t.Fatalf("runtime version not cached, got %s", m.Version()) }
 }

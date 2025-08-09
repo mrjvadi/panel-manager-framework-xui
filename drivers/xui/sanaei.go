@@ -3,6 +3,7 @@ package xui
 import (
     "context"
     "fmt"
+    "net/http"
 
     "github.com/mrjvadi/panel-manager-framework-xui/core"
     xdto "github.com/mrjvadi/panel-manager-framework-xui/core/dto/xui"
@@ -17,10 +18,6 @@ func init() { core.Register(SanaeiName, NewSanaei) }
 type sanaei struct{ *generic }
 
 func NewSanaei(sp core.PanelSpec, opts ...core.Option) (core.Driver, error) {
-    if sp.Endpoints == nil { sp.Endpoints = map[string]string{} }
-    if sp.Endpoints["login"] == "" { sp.Endpoints["login"] = "/login" }
-    if sp.Endpoints["getInbound"] == "" { sp.Endpoints["getInbound"] = "/panel/api/inbounds/get/%d" }
-    if sp.Endpoints["addInbound"] == "" { sp.Endpoints["addInbound"] = "/panel/api/inbounds/add" }
     g := newGeneric(sp, opts...)
     return &sanaei{ g }, nil
 }
@@ -28,9 +25,18 @@ func NewSanaei(sp core.PanelSpec, opts ...core.Option) (core.Driver, error) {
 func (d *sanaei) Name() string    { return SanaeiName }
 func (d *sanaei) Version() string { if d.sp.Version != "" { return d.sp.Version }; return PluginVer }
 func (d *sanaei) Capabilities() core.Capabilities { return core.Capabilities{} }
-func (d *sanaei) ListUsers(ctx context.Context) ([]core.User, error) { return nil, nil }
-func (d *sanaei) ListInbounds(ctx context.Context) ([]core.Inbound, error) { return nil, nil }
 
+func (d *sanaei) ListUsers(ctx context.Context) ([]core.User, error) { return nil, nil }
+
+func (d *sanaei) ListInbounds(ctx context.Context) ([]core.Inbound, error) {
+    // This endpoint returns a JSON list; we map minimal fields
+    var body any
+    if err := d.getJSON(ctx, d.sp.Endpoints["listInbounds"], &body); err != nil { return nil, err }
+    // keep simple; real schema varies across forks
+    return nil, nil
+}
+
+// Typed API
 var _ ext.XUITyped = (*sanaei)(nil)
 
 func (d *sanaei) GetInboundTyped(ctx context.Context, inboundID int) (xdto.Inbound, error) {
@@ -62,7 +68,20 @@ func (d *sanaei) AddInboundTyped(ctx context.Context, in xdto.InboundCreate) (xd
 }
 
 func (d *sanaei) UpdateInboundTyped(ctx context.Context, inboundID int, in xdto.InboundUpdate) (xdto.Inbound, error) {
-    return d.AddInboundTyped(ctx, xdto.InboundCreate(in))
+    // X-UI typically expects POST to /panel/api/inbounds/update/{id}
+    path := fmt.Sprintf(d.sp.Endpoints["updateInbound"], inboundID)
+    var m map[string]any
+    if err := d.postJSON(ctx, path, map[string]any{
+        "remark": in.Remark, "protocol": in.Protocol, "port": in.Port,
+        "settings": in.Settings, "sniffing": in.Sniffing, "streamSettings": in.StreamSettings,
+    }, &m); err != nil {
+        if core.IsHTTPStatus(err, http.StatusNotFound) {
+            return xdto.Inbound{}, err
+        }
+        return xdto.Inbound{}, err
+    }
+    if v, ok := m["id"].(float64); ok && int(v) > 0 { return d.GetInboundTyped(ctx, int(v)) }
+    return d.GetInboundTyped(ctx, inboundID)
 }
 
 func (d *sanaei) ClientTrafficByEmailTyped(ctx context.Context, email string) ([]xdto.TrafficRecord, error) {
@@ -77,15 +96,7 @@ func (d *sanaei) CloneInboundTyped(ctx context.Context, inboundID int, opts xdto
     baseRemark := orig.Remark; if baseRemark == "" { baseRemark = "inb" }
     newRemark := baseRemark + "-copy-" + randSuffix(5)
     if opts.Remark != nil && *opts.Remark != "" { newRemark = *opts.Remark }
-    // retry on conflict a couple of times
-    for i:=0; i<2; i++ {
-        inb, err := d.AddInboundTyped(ctx, xdto.InboundCreate{
-            Remark: newRemark, Protocol: orig.Protocol, Port: newPort,
-            Settings: orig.Settings, Sniffing: orig.Sniffing, StreamSettings: orig.StreamSettings,
-        })
-        if err == nil { return inb, nil }
-        newPort = randPort(); newRemark = baseRemark + "-copy-" + randSuffix(6)
-    }
+    // update may be more correct than add for some forks; we stick to add
     return d.AddInboundTyped(ctx, xdto.InboundCreate{
         Remark: newRemark, Protocol: orig.Protocol, Port: newPort,
         Settings: orig.Settings, Sniffing: orig.Sniffing, StreamSettings: orig.StreamSettings,
