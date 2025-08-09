@@ -1,12 +1,12 @@
 package xui
 
 var defaultEndpoints = map[string]string{
-    "login":        "/login",
-    "listInbounds": "/panel/api/inbounds/list",
-    "getInbound":   "/panel/api/inbounds/get/%d",
-    "addInbound":   "/panel/api/inbounds/add",
-    "updateInbound":"/panel/api/inbounds/update/%d",
-    "deleteInbound":"/panel/api/inbounds/del/%d",
-    "addClient":    "/panel/api/inbounds/addClient",
-    "delClient":    "/panel/api/inbounds/delClient/%d",
+	"login":         "/login",
+	"listInbounds":  "/panel/inbound/list",
+	"getInbound":    "/panel/api/inbounds/get/%d",
+	"addInbound":    "/panel/api/inbounds/add",
+	"updateInbound": "/panel/inbound/update/%d",
+	"deleteInbound": "/panel/inbound/del/%d",
+	"addClient":     "/panel/inbound/addClient",
+	"delClient":     "/panel/inbounds/delClient/%d",
 }

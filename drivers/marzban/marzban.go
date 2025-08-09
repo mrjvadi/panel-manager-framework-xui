@@ -1,10 +1,11 @@
 package marzban
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,7 +33,7 @@ func New(sp core.PanelSpec, opts ...core.Option) (core.Driver, error) {
 		sp.Endpoints["login"] = "/api/admin/token"
 	}
 	if sp.Endpoints["listUsers"] == "" {
-		sp.Endpoints["listUsers"] = "/api/admin/users"
+		sp.Endpoints["listUsers"] = "/api/users"
 	}
 	if sp.Endpoints["system"] == "" {
 		sp.Endpoints["system"] = "/api/system"
@@ -70,17 +71,31 @@ func (d *driver) auth(req *http.Request) {
 }
 
 func (d *driver) Login(ctx context.Context) error {
-	body := map[string]any{"username": d.sp.Auth.Username, "password": d.sp.Auth.Password}
-	b, _ := json.Marshal(body)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, d.cli.BaseURL+d.sp.Endpoints["login"], bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	var out map[string]any
+	form := url.Values{}
+	form.Set("grant_type", "password")
+	form.Set("username", d.sp.Auth.Username)
+	form.Set("password", d.sp.Auth.Password)
+
+	req, _ := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		d.cli.BaseURL+d.sp.Endpoints["login"], // "/api/admin/token"
+		strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// پاسخ استاندارد: {"access_token":"...", "token_type":"bearer"}
+	var out struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+	}
 	if err := core.DoJSON(ctx, d.cli, req, &out); err != nil {
 		return err
 	}
-	if t, ok := out["access_token"].(string); ok {
-		d.stat.token = t
+	if out.AccessToken == "" {
+		return fmt.Errorf("empty access token from login")
 	}
+	d.stat.token = out.AccessToken
 	return nil
 }
 

@@ -1,12 +1,13 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"time"
+	"strings"
 )
 
 type HTTPError struct {
@@ -22,72 +23,34 @@ func IsHTTPStatus(err error, code int) bool {
 	return false
 }
 
-func DoJSON(ctx context.Context, cli *HTTP, req *http.Request, v any) error {
-	if cli == nil || cli.Client == nil {
-		return fmt.Errorf("nil client")
+func DoJSON(ctx context.Context, cli *HTTP, req *http.Request, out any) error {
+	resp, err := cli.Client.Do(req)
+	if err != nil {
+		return err
 	}
-	attempts := cli.Retry.MaxAttempts
-	if attempts <= 0 {
-		attempts = 1
+	defer resp.Body.Close()
+
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &HTTPError{Code: resp.StatusCode, Body: string(preview(b))}
 	}
-
-	var lastErr error
-
-	for i := 1; i <= attempts; i++ {
-		if cli.Br != nil && !cli.Br.Allow() {
-			return ErrCircuitOpen
-		}
-		if cli.Log != nil {
-			cli.Log.Debug("http.attempt", "n", i, "method", req.Method, "url", req.URL.String())
-		}
-
-		resp, err := cli.Client.Do(req.Clone(ctx))
-		if err != nil {
-			lastErr = fmt.Errorf("request failed: %w", err)
-			if i == attempts || !retryableNetErr(err) {
-				return lastErr
-			}
-			time.Sleep(cli.Retry.backoff(i))
-			continue
-		}
-
-		func() {
-			defer resp.Body.Close()
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-				lastErr = &HTTPError{Code: resp.StatusCode, Body: string(b)}
-				return
-			}
-			if v == nil {
-				io.Copy(io.Discard, resp.Body)
-				lastErr = nil
-				return
-			}
-			if de := json.NewDecoder(resp.Body).Decode(v); de != nil {
-				lastErr = fmt.Errorf("decode json: %w", de)
-				return
-			}
-			lastErr = nil
-		}()
-
-		if lastErr == nil {
-			if cli.Log != nil {
-				cli.Log.Info("http.ok", "code", resp.StatusCode)
-			}
-			if cli.Br != nil {
-				cli.Br.OnSuccess()
-			}
-			return nil
-		}
-
-		// اگر HTTPError بود و قابل retry، دوباره تلاش کن
-		if he, ok := lastErr.(*HTTPError); ok && i < attempts && cli.Retry.Codes[he.Code] {
-			time.Sleep(cli.Retry.backoff(i))
-			continue
-		}
-
-		// در غیر اینصورت برگردون
-		return lastErr
+	if out == nil || len(b) == 0 {
+		return nil
 	}
-	return lastErr
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	if err := dec.Decode(out); err != nil {
+		return fmt.Errorf("decode json into %T: %w; body: %s", out, err, preview(b))
+	}
+	return nil
+}
+
+func preview(b []byte) string {
+	if len(b) > 2048 {
+		b = b[:2048]
+	}
+	// جلو HTML:
+	s := strings.TrimSpace(string(b))
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
 }
