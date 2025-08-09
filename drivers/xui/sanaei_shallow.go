@@ -209,7 +209,7 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 			beforeIDs[id] = struct{}{}
 		}
 	}
-	
+
 	buildForm := func(rem string, p int) url.Values {
 		v := url.Values{}
 		v.Set("up", "0")
@@ -257,9 +257,8 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 			break
 		}
 
-		// Retry with backoff if ID is not returned
 		for i := 0; i < 5 && created.ID == 0; i++ {
-			time.Sleep(time.Duration(150*(i+1)) * time.Millisecond) // Exponential backoff
+			time.Sleep(time.Duration(150*(i+1)) * time.Millisecond)
 			if got, ok := d.resolveNewInbound(ctx, beforeIDs, newRemark, port); ok {
 				created = got
 				break
@@ -269,14 +268,14 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		if created.ID != 0 {
 			break
 		}
-		
+
 		port = 20000 + mrand.Intn(40000)
 	}
 
 	if created.ID == 0 {
 		return xdto.Inbound{}, fmt.Errorf("clone created but id not resolved (remark=%s, port=%d)", newRemark, port)
 	}
-	
+
 	if opts.Client != nil {
 		if err := d.addClientFromCreate(ctx, created.ID, *opts.Client); err != nil {
 			return created, fmt.Errorf("inbound cloned, add-client failed: %w", err)
@@ -294,7 +293,7 @@ func toJSONString(v any) string {
 		b, _ := json.Marshal(t)
 		return string(b)
 	case nil:
-		return ""
+		return "{}"
 	default:
 		b, _ := json.Marshal(t)
 		return string(b)
