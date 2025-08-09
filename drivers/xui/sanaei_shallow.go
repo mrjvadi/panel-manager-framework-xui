@@ -19,7 +19,10 @@ import (
 	ext "github.com/mrjvadi/panel-manager-framework-xui/core/ext"
 )
 
+// ensure the driver exposes this extension
 var _ ext.XUIShallowClone = (*sanaei)(nil)
+
+// ---- helpers (local and safe) ----
 
 func (d *sanaei) ep(key, def string) string {
 	if s := d.sp.Endpoints[key]; s != "" {
@@ -47,6 +50,7 @@ func anyToInt(a any) int {
 	}
 }
 
+// Extracts the main object from various response structures
 func takeObj(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
@@ -135,6 +139,16 @@ func (d *sanaei) resolveNewInbound(ctx context.Context, beforeIDs map[int]struct
 	return xdto.Inbound{}, false
 }
 
+// Generates a new UUID v4.
+func newUUID() (string, error) {
+	b := make([]byte, 16)
+	_, err := crand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+}
+
 func randSlug(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	var b strings.Builder
@@ -145,41 +159,15 @@ func randSlug(n int) string {
 	return b.String()
 }
 
-func (d *sanaei) addClientFromCreate(ctx context.Context, inboundID int, c xdto.ClientCreate) error {
-	if c.Email == "" {
-		return fmt.Errorf("client email is required")
-	}
-	cli := map[string]any{
-		"email":      c.Email,
-		"enable":     c.Enable,
-		"expiryTime": c.ExpiryTime,
-		"totalGB":    c.TotalGB,
-		"limitIp":    c.LimitIP,
-		"reset":      0,
-		"flow":       c.Flow,
-		"subId":      c.SubID,
-		"comment":    c.Comment,
-	}
-	settings := map[string]any{"clients": []any{cli}}
-	sb, _ := json.Marshal(settings)
 
-	payload := map[string]any{
-		"id":       inboundID,
-		"settings": string(sb),
-	}
-	body, _ := json.Marshal(payload)
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, d.cli.BaseURL+d.ep("addClient", "/panel/api/inbounds/addClient"), bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	return d.doJSON(ctx, req, nil)
-}
-
+// ---- Main implementation: CloneInboundShallow ----
 func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xdto.CloneInboundOptions) (xdto.Inbound, error) {
 	orig, err := d.getInboundRaw(ctx, inboundID)
 	if err != nil {
 		return xdto.Inbound{}, err
 	}
 
+	// Remark
 	var newRemark string
 	if opts.Remark != nil && *opts.Remark != "" {
 		newRemark = *opts.Remark
@@ -191,6 +179,7 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		newRemark = baseRemark + "-" + randSlug(6)
 	}
 
+	// Port
 	var port int
 	if opts.Port != nil {
 		port = *opts.Port
@@ -202,6 +191,7 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		}
 	}
 
+	// Get existing IDs to resolve the new one later
 	before, _ := d.listInboundsRaw(ctx)
 	beforeIDs := make(map[int]struct{}, len(before))
 	for _, m := range before {
@@ -210,7 +200,8 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		}
 	}
 
-	buildForm := func(rem string, p int) url.Values {
+	// Build the form with the correct client structure inside settings
+	buildForm := func(rem string, p int) (url.Values, error) {
 		v := url.Values{}
 		v.Set("up", "0")
 		v.Set("down", "0")
@@ -225,40 +216,96 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		} else {
 			v.Set("protocol", "vless")
 		}
-		v.Set("settings", toJSONString(orig["settings"]))
+
+		// **Correctly build the settings with a new client**
+		newSettings := map[string]any{
+			"decryption": "none",
+			"fallbacks":  []any{},
+		}
+		
+		uuid, err := newUUID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate UUID for client: %w", err)
+		}
+
+		var clientData map[string]any
+		if opts.Client != nil {
+			// Use provided client options
+			clientData = map[string]any{
+				"id":         uuid,
+				"email":      opts.Client.Email,
+				"enable":     opts.Client.Enable,
+				"totalGB":    opts.Client.TotalGB,
+				"expiryTime": opts.Client.ExpiryTime,
+				"limitIp":    opts.Client.LimitIP,
+				"flow":       opts.Client.Flow,
+				"subId":      opts.Client.SubID,
+				"comment":    opts.Client.Comment,
+				"reset":      0,
+			}
+		} else {
+			// Create a default client
+			clientData = map[string]any{
+				"id":      uuid,
+				"email":   randSlug(8),
+				"enable":  true,
+				"totalGB": 0,
+				"expiryTime": 0,
+				"limitIp": 0,
+				"flow":    "",
+				"subId":   randSlug(16),
+				"reset":   0,
+			}
+		}
+		newSettings["clients"] = []any{clientData}
+
+		v.Set("settings", toJSONString(newSettings))
 		v.Set("streamSettings", toJSONString(orig["streamSettings"]))
 		v.Set("sniffing", toJSONString(orig["sniffing"]))
-		v.Set("allocate", toJSONString(orig["allocate"]))
-		return v
+		
+		// Handle potential nil allocate
+		if orig["allocate"] != nil {
+			v.Set("allocate", toJSONString(orig["allocate"]))
+		} else {
+			v.Set("allocate", "{}")
+		}
+
+		return v, nil
 	}
 
 	const maxTry = 5
 	var created xdto.Inbound
 
 	for attempt := 0; attempt < maxTry; attempt++ {
-		form := buildForm(newRemark, port)
+		form, err := buildForm(newRemark, port)
+		if err != nil {
+			return xdto.Inbound{}, err
+		}
+
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, d.cli.BaseURL+d.ep("addInbound", "/panel/api/inbounds/add"),
 			strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		var resp map[string]any
-		err := d.doJSON(ctx, req, &resp)
+		err = d.doJSON(ctx, req, &resp)
+
 		if err != nil {
 			if he, ok := err.(*core.HTTPError); ok && he.Code == http.StatusConflict {
-				port = 20000 + mrand.Intn(40000)
+				port = 20000 + mrand.Intn(40000) // retry with new port on conflict
 				continue
 			}
-			return xdto.Inbound{}, err
+			return xdto.Inbound{}, err // other errors
 		}
-
+		
 		obj := takeObj(resp)
 		if id := anyToInt(obj["id"]); id > 0 {
 			created = xdto.Inbound{ID: id, Remark: newRemark, Port: port, Raw: obj}
 			break
 		}
 
+		// If ID is not in response, try to resolve it by listing inbounds
 		for i := 0; i < 5 && created.ID == 0; i++ {
-			time.Sleep(time.Duration(150*(i+1)) * time.Millisecond)
+			time.Sleep(time.Duration(200*(i+1)) * time.Millisecond) // exponential backoff
 			if got, ok := d.resolveNewInbound(ctx, beforeIDs, newRemark, port); ok {
 				created = got
 				break
@@ -268,7 +315,7 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		if created.ID != 0 {
 			break
 		}
-
+		
 		port = 20000 + mrand.Intn(40000)
 	}
 
@@ -276,15 +323,10 @@ func (d *sanaei) CloneInboundShallow(ctx context.Context, inboundID int, opts xd
 		return xdto.Inbound{}, fmt.Errorf("clone created but id not resolved (remark=%s, port=%d)", newRemark, port)
 	}
 
-	if opts.Client != nil {
-		if err := d.addClientFromCreate(ctx, created.ID, *opts.Client); err != nil {
-			return created, fmt.Errorf("inbound cloned, add-client failed: %w", err)
-		}
-	}
-
 	return created, nil
 }
 
+// Converts a value to a JSON string.
 func toJSONString(v any) string {
 	switch t := v.(type) {
 	case string:
@@ -293,8 +335,9 @@ func toJSONString(v any) string {
 		b, _ := json.Marshal(t)
 		return string(b)
 	case nil:
-		return "{}"
+		return "{}" // return empty JSON object for nil
 	default:
+		// Fallback for other types
 		b, _ := json.Marshal(t)
 		return string(b)
 	}
