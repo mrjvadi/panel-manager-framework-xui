@@ -1,6 +1,5 @@
 package xui
 
-// Default endpoints used by X-UI branches if not overridden in PanelSpec.Endpoints.
 var defaultEndpoints = map[string]string{
     "login":        "/login",
     "listInbounds": "/panel/api/inbounds/list",

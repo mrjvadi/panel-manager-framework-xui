@@ -9,5 +9,14 @@ func (m *Manager) PanelSession(id string, opts ...CtxOption) *Panel { return &Pa
 func (p *Panel) WithTimeout(d time.Duration) *Panel { p.req.o.timeout = d; return p }
 func (p *Panel) Users() ([]User, error) { ctx, cancel := p.req.derive(); defer cancel(); return p.m.Users(ctx, p.id) }
 func (p *Panel) Inbounds() ([]Inbound, error) { ctx, cancel := p.req.derive(); defer cancel(); return p.m.Inbounds(ctx, p.id) }
-func (p *Panel) As[T any]() (T, bool) { return p.m.As[T](p.id) }
-func (p *Panel) Try[T any](fn func(ctx context.Context, t T) error) error { v, ok := p.m.As[T](p.id); if !ok { return ErrExtNotSupported }; ctx, cancel := p.req.derive(); defer cancel(); return fn(ctx, v) }
+
+// Generic helpers moved to free functions: As, Try (see as.go)
+func (p *Panel) ID() string { return p.id }
+func (p *Panel) Manager() *Manager { return p.m }
+
+// TryExt runs fn with a typed extension if available; otherwise returns ErrExtNotSupported.
+func TryExt[T any](p *Panel, fn func(ctx context.Context, t T) error) error {
+    v, ok := As[T](p.m, p.id); if !ok { return ErrExtNotSupported }
+    ctx, cancel := p.req.derive(); defer cancel()
+    return fn(ctx, v)
+}

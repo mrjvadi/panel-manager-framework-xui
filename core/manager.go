@@ -100,5 +100,3 @@ func (m *Manager) InboundsAll(ctx context.Context) (map[string][]Inbound, error)
 }
 func (m *Manager) Users(ctx context.Context, id string) ([]User, error) { s, ok := m.getSlot(id); if !ok || !s.enabled { return nil, errors.New("panel not found or disabled") }; return s.drv.ListUsers(ctx) }
 func (m *Manager) Inbounds(ctx context.Context, id string) ([]Inbound, error) { s, ok := m.getSlot(id); if !ok || !s.enabled { return nil, errors.New("panel not found or disabled") }; return s.drv.ListInbounds(ctx) }
-
-func (m *Manager) As[T any](id string) (T, bool) { s, ok := m.getSlot(id); if !ok || !s.enabled { var zero T; return zero, false }; v, ok := any(s.drv).(T); return v, ok }

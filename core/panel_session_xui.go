@@ -10,7 +10,7 @@ type PanelXUI struct{ p *Panel }
 func (p *Panel) XUI() PanelXUI { return PanelXUI{ p: p } }
 
 func (x PanelXUI) CloneInbound(inboundID int, opts xdto.CloneInboundOptions) (xdto.Inbound, error) {
-    if xt, ok := x.p.m.As[ext.XUITyped](x.p.id); ok {
+    if xt, ok := As[ext.XUITyped](x.p.m, x.p.id); ok {
         ctx, cancel := x.p.req.derive(); defer cancel()
         return xt.CloneInboundTyped(ctx, inboundID, opts)
     }

@@ -29,10 +29,8 @@ func (d *sanaei) Capabilities() core.Capabilities { return core.Capabilities{} }
 func (d *sanaei) ListUsers(ctx context.Context) ([]core.User, error) { return nil, nil }
 
 func (d *sanaei) ListInbounds(ctx context.Context) ([]core.Inbound, error) {
-    // This endpoint returns a JSON list; we map minimal fields
     var body any
     if err := d.getJSON(ctx, d.sp.Endpoints["listInbounds"], &body); err != nil { return nil, err }
-    // keep simple; real schema varies across forks
     return nil, nil
 }
 
@@ -68,7 +66,6 @@ func (d *sanaei) AddInboundTyped(ctx context.Context, in xdto.InboundCreate) (xd
 }
 
 func (d *sanaei) UpdateInboundTyped(ctx context.Context, inboundID int, in xdto.InboundUpdate) (xdto.Inbound, error) {
-    // X-UI typically expects POST to /panel/api/inbounds/update/{id}
     path := fmt.Sprintf(d.sp.Endpoints["updateInbound"], inboundID)
     var m map[string]any
     if err := d.postJSON(ctx, path, map[string]any{
@@ -96,7 +93,6 @@ func (d *sanaei) CloneInboundTyped(ctx context.Context, inboundID int, opts xdto
     baseRemark := orig.Remark; if baseRemark == "" { baseRemark = "inb" }
     newRemark := baseRemark + "-copy-" + randSuffix(5)
     if opts.Remark != nil && *opts.Remark != "" { newRemark = *opts.Remark }
-    // update may be more correct than add for some forks; we stick to add
     return d.AddInboundTyped(ctx, xdto.InboundCreate{
         Remark: newRemark, Protocol: orig.Protocol, Port: newPort,
         Settings: orig.Settings, Sniffing: orig.Sniffing, StreamSettings: orig.StreamSettings,

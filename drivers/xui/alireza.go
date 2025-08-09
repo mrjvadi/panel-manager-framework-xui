@@ -15,7 +15,6 @@ func init() { core.Register(AlirezaName, NewAlireza) }
 type alireza struct{ *generic }
 
 func NewAlireza(sp core.PanelSpec, opts ...core.Option) (core.Driver, error) {
-    // some forks use different login path; override via spec.Endpoints if needed
     g := newGeneric(sp, opts...)
     return &alireza{ g }, nil
 }
