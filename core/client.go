@@ -10,6 +10,8 @@ import (
 type HTTP struct {
     BaseURL string
     Client  *http.Client
+    Retry   RetryPolicy
+    Br      *Breaker
 }
 
 func NewHTTP(base string, insecure bool, timeout time.Duration, c *http.Client) *HTTP {
@@ -19,5 +21,5 @@ func NewHTTP(base string, insecure bool, timeout time.Duration, c *http.Client) 
     }
     jar, _ := cookiejar.New(nil)
     c.Jar = jar
-    return &HTTP{ BaseURL: base, Client: c }
+    return &HTTP{ BaseURL: base, Client: c, Retry: DefaultRetryPolicy(), Br: NewBreaker(5, 5*time.Second) }
 }

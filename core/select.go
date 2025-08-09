@@ -118,3 +118,27 @@ func (m *Manager) XUIAll() Group     { return m.Family("xui.") }
 func (m *Manager) XUIGeneric() Group { return m.Kind(DriverXUIGeneric) }
 func (m *Manager) XUISanaei() Group  { return m.Kind(DriverXUISanaei) }
 func (m *Manager) XUIAlireza() Group { return m.Kind(DriverXUIAlireza) }
+
+
+// HealthAll: اجرای health check روی تمام پنل‌های گروه (اگر پیاده‌سازی شده باشد)
+func (g Group) HealthAll(ctx context.Context) map[string]error {
+    ids := g.IDs()
+    out := make(map[string]error, len(ids))
+    var mu sync.Mutex
+    sem := make(chan struct{}, g.m.opts.MaxConcurrency)
+    var wg sync.WaitGroup
+    for _, id := range ids {
+        wg.Add(1); sem <- struct{}{}
+        go func(id string) {
+            defer wg.Done(); defer func(){<-sem}()
+            var err error
+            if slot, ok := g.m.getSlot(id); ok {
+                if h, ok2 := slot.drv.(HealthChecker); ok2 {
+                    err = h.Health(ctx)
+                }
+            }
+            mu.Lock(); out[id] = err; mu.Unlock()
+        }(id)
+    }
+    wg.Wait(); return out
+}

@@ -11,6 +11,15 @@ import (
 type Option func(*options)
 
 type options struct {
+	HTTPClient     *http.Client
+	Timeout        time.Duration
+	Hooks          *Hooks
+	MaxConcurrency int // حداکثر همزمانی
+	// HTTP-level configs for drivers
+	RetryPolicy    RetryPolicy
+	BreakerThresh  int
+	BreakerCooldown time.Duration
+}
     HTTPClient     *http.Client
     Timeout        time.Duration
     Hooks          *Hooks
@@ -21,6 +30,12 @@ func WithHTTPClient(c *http.Client) Option { return func(o *options) { o.HTTPCli
 func WithTimeout(d time.Duration) Option    { return func(o *options) { o.Timeout = d } }
 func WithHooks(h *Hooks) Option             { return func(o *options) { o.Hooks = h } }
 func WithMaxConcurrency(n int) Option       { return func(o *options) { if n > 0 { o.MaxConcurrency = n } } }
+func WithRetryPolicy(p RetryPolicy) Option    { return func(o *options) { o.RetryPolicy = p } }
+func WithBreaker(threshold int, cooldown time.Duration) Option {
+	return func(o *options) { if threshold > 0 { o.BreakerThresh = threshold }; if cooldown > 0 { o.BreakerCooldown = cooldown } }
+}
+func WithBaseContext(ctx context.Context) Option { return func(o *options) { if ctx != nil { o.BaseCtx = ctx } } }
+func WithRequestTimeout(d time.Duration) Option  { return func(o *options) { if d > 0 { o.ReqTimeout = d } } }
 
 type panelSlot struct {
     drv     Driver
@@ -34,7 +49,7 @@ type Manager struct {
 }
 
 func New(opts ...Option) *Manager {
-    o := options{ Timeout: 30 * time.Second, MaxConcurrency: 8 }
+    o := options{ Timeout: 30 * time.Second, MaxConcurrency: 8, BaseCtx: context.Background(), ReqTimeout: 15 * time.Second }
     for _, fn := range opts { fn(&o) }
     return &Manager{ opts: o, panels: map[string]*panelSlot{} }
 }
